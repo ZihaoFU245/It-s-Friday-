@@ -12,6 +12,9 @@ class Config(BaseSettings):
     lang: str = Field("en", env="LANG")
     timeout: int = Field(10, env="TIMEOUT")
     temp_unit: str = Field("c", env="TEMP_UNIT")
+    # Google API
+    google_credentials_path: str = Field("backend/credentials.json", env="GOOGLE_CREDENTIALS_PATH")
+    google_token_path: str = Field("backend/token.json", env="GOOGLE_TOKEN_PATH")
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parent / ".env",

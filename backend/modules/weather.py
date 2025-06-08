@@ -1,9 +1,11 @@
 import os
+import sys
 import aiohttp
 import asyncio
 import json
 from typing import Any, Dict, Tuple
-from ..config import Config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from config import Config
 
 class FetchWeather:
     config: Config
