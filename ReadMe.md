@@ -37,7 +37,7 @@ flowchart TD
     H --> C3(MCP Skill Server - skills/)
 ```
 
-## Here is the workflow or the app
+## Here is the workflow of the app
 ```mermaid
 sequenceDiagram
     participant UI as User Interface
