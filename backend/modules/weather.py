@@ -1,11 +1,13 @@
 import os
 import sys
 import aiohttp
+import requests
 import asyncio
 import json
 from typing import Any, Dict, Tuple
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from config import Config
+import logging
 
 class FetchWeather:
     config: Config
@@ -14,9 +16,12 @@ class FetchWeather:
     lang: str
     temp_unit: str
     timeout: int
+    logger: Any
 
     def __init__(self):
         self.config = Config()
+        self.config.configure_logging()
+        self.logger = logging.getLogger(__name__)
         self.base_url = self.config.weather_url
         self.api_key = self.config.weather_api_key
         self.lang = self.config.lang
@@ -56,13 +61,18 @@ class FetchWeather:
                 data = await response.json()
                 formatted = self._format_response(data)
                 return formatted, data
-                
         except asyncio.TimeoutError:
+            self.logger.error("Timeout while fetching weather data for city: %s", city)
             return {"error": "Request timed out"}, {}
         except aiohttp.ClientError as e:
+            self.logger.error("Client error while fetching weather data for city: %s", city)
             return {"error": str(e)}, {}
         except json.JSONDecodeError:
+            self.logger.error("JSON decode error while fetching weather data for city: %s", city)
             return {"error": "Invalid JSON response"}, {}
+        except Exception as e:
+            self.logger.error("Unexpected error while fetching weather data for city: %s", city)
+            return {"error": str(e)}, {}
         
     def _format_response(self, data: Dict[str, Any]) -> Dict[str, Any]:
         current = data.get('current', {})
@@ -91,7 +101,27 @@ class FetchWeather:
             "pm10": air_quality.get("pm10")
         }
     
-"""
+class Location:
+    def __init__(self):
+        self.config = Config()
+        self.config.configure_logging()
+        self.logger = logging.getLogger(__name__)
+
+    
+    def get_location_by_ip(self):
+        """
+        Asynchronously fetches the user's location based on their IP address using ipinfo.io.
+        Returns a tuple (city, country) or a dict with error info.
+        """
+        try:
+            resp = requests.get("https://ipinfo.io")
+            data = resp.json()
+            return data.get('city', None), data.get('country', None)
+        except requests.HTTPError as e:
+            self.logger.error("Request location HTTP error", e)
+            return "getting location by ip failed"
+
+
 if __name__ == "__main__":
     import asyncio
     import aiohttp
@@ -101,12 +131,19 @@ if __name__ == "__main__":
         fetcher = FetchWeather()
         async with aiohttp.ClientSession() as session:
             formatted, original = await fetcher.fetch_weather(session, city, model="current")
-            return formatted, original
+            print("Weather API Test for city 'madrid':")
+            print("Formatted response:")
+            print(formatted)
+            print("\nOriginal response:")
+            print(original)
+            print("\n---\n")
 
-    result = asyncio.run(test_weather())
-    formatted, original = result
-    print("Formatted response:")
-    print(formatted)
-    print("\nOriginal response:")
-    print(original)
-"""
+    def test_location():
+        location = Location()
+        result =  location.get_location_by_ip()
+        print("Location by IP Test:")
+        print(result)
+        print("\n---\n")
+
+    test_location()
+

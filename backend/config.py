@@ -5,6 +5,7 @@ from typing import Union, Literal
 import logging
 import logging.config
 import sys
+import os
 
 class Config(BaseSettings):
     """
@@ -40,6 +41,10 @@ class Config(BaseSettings):
     lang: str = Field("en", env="LANG")
     timeout: int = Field(10, env="TIMEOUT")
     temp_unit: str = Field("c", env="TEMP_UNIT")
+
+    # PLATFORM & Location
+    platform: str = Field(default_factory=lambda: os.environ.get("PLATFORM", "local"), env="PLATFORM")
+    location: Union[None, str] = Field(default=None, env="LOCATION")
 
     # Google API
     google_credentials_path: Path = Field(Path(__file__).parent / "credentials.json", env="GOOGLE_CREDENTIALS_PATH")
