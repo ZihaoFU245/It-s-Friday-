@@ -5,10 +5,13 @@ import os
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '...'))
 from config import Config
+import logging
 
 class GoogleBaseClient:
     def __init__(self, scopes: list[str]):
         self.config = Config()
+        self.config.configure_logging()
+        self.logger = logging.getLogger(__name__)
         self.creds: Credentials | None = None
         self.scopes = scopes
         self.token_path = self.config.google_token_path
