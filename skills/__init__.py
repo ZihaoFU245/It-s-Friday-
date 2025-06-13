@@ -11,7 +11,7 @@ concerns between the core application and the MCP interface.
 
 from skills.server import mcp
 from skills.all_skills import (
-    fetch_weather,
+    get_weather_now,
     get_weather_forecast,
     get_unread_emails,
     send_email,
@@ -21,7 +21,7 @@ from skills.all_skills import (
 
 __all__ = [
     'mcp',
-    'fetch_weather',
+    'get_weather_now',
     'get_weather_forecast', 
     'get_unread_emails',
     'send_email',

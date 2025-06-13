@@ -13,21 +13,29 @@ from app import weather_service, email_service, calendar_service, drive_service
 from typing import Optional, Union, Tuple, Dict, Any
 
 # Weather operations using service layer
-async def fetch_weather(
-    city: Optional[str] = None, 
-    type_: str = "current"
-) -> Union[Tuple[Dict[str, Any], Dict[str, Any]], Tuple[str, Dict]]:
+async def _get_weather_now(
+        q: Optional[str] = None, 
+        format: Optional[bool] = True,
+) -> Dict[str, Any]:
     """
     Fetch weather using the weather service.
     Now provider-agnostic and with better error handling.
     """
-    return await weather_service.get_weather(city=city, mode=type_)
+    return await weather_service.get_weather(q=q, format=format)
 
-async def get_weather_forecast(
-    city: Optional[str] = None
-) -> Union[Tuple[Dict[str, Any], Dict[str, Any]], Tuple[str, Dict]]:
+async def _get_weather_forecast(
+        days: int,
+        q: Optional[str] = None,
+) -> Dict[str, Any]:
     """Get weather forecast using service layer"""
-    return await weather_service.get_forecast(city=city)
+    return await weather_service.get_forecast(q=q, days=days)
+
+async def _get_weather_at(
+        dt: str,
+        q: Optional[str] = None
+) -> Dict[str, Any]:
+    """Get weather at a given time stamp"""
+    return await weather_service.search_weather(dt, q)
 
 # Email operations using service layer  
 def get_unread_emails(max_results: int = 10):

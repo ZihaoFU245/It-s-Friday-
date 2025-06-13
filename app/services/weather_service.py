@@ -42,49 +42,49 @@ class WeatherService:
     
     async def get_weather(
         self, 
-        city: Optional[str] = None, 
-        mode: str = "current"
-    ) -> Union[Tuple[Dict[str, Any], Dict[str, Any]], Tuple[str, Dict]]:
+        q: Optional[str] = None, 
+        mode: str = "current",
+        format: bool = True,
+        **others: Any
+    ) -> Dict[str, Any]:
         """
         Get weather data with smart location resolution.
         
         Args:
-            city: Optional city name. If None, uses config location or IP lookup
-            mode: Weather mode - 'current', 'forecast', 'search', 'history'
+            q: search query. see "https://www.weatherapi.com/docs/" If None, uses config location or IP lookup
+            mode: Weather mode - 'current', 'forecast', 'search', 'history'; forecast and history need additional params
             
         Returns:
-            Success: Tuple of (formatted_data, raw_data)
-            Error: Tuple of (error_message, empty_dict)
+            Success: A dictionary of returned weather information
+            Error: A dictionary {"error": ${error message}}
         """
         try:
             # Determine location
-            target_city = await self._resolve_location(city)
-            if isinstance(target_city, tuple) and len(target_city) == 2 and isinstance(target_city[1], dict):
-                # Error from location resolution
-                return target_city
+            target = await self._resolve_location(q)
+            if target == "unknown":
+                return {"error": "Location can not be determined"}
             
             # Fetch weather data
             async with aiohttp.ClientSession() as session:
-                formatted, raw = await self.weather_fetcher.fetch_weather(
-                    session, target_city, model=mode
+                info = await self.weather_fetcher.fetch_weather(
+                    session, target, mode, format, **others
                 )
-                return formatted, raw
+                return info
                 
         except Exception as e:
             error_msg = f"Weather service error: {str(e)}"
             return error_msg, {}
     
-    async def _resolve_location(self, city: Optional[str]) -> Union[str, Tuple[str, Dict]]:
+    async def _resolve_location(self, q: Optional[str]) -> str:
         """
         Resolve the target location using priority: provided -> config -> IP lookup
         
         Returns:
-            Success: city name as string
-            Error: tuple of (error_message, empty_dict)
+            coordinate as a string
         """
-        # 1. Use provided city if available
-        if city:
-            return city
+        # 1. Use provided location if available
+        if q:
+            return q
         
         # 2. Use config location if available  
         config_location = self.config.location
@@ -92,24 +92,22 @@ class WeatherService:
             return config_location
         
         # 3. Fallback to IP-based location detection
-        try:
-            city_country = self.location_service.get_location_by_ip()
-            if isinstance(city_country, tuple) and len(city_country) >= 2:
-                return city_country[0]  # Return city name
-            else:
-                # Location lookup failed
-                return "Failed to determine location. Please specify a city.", {}
-        except Exception as e:
-            return f"Location detection error: {str(e)}", {}
+        coordinates = self.location_service.get_location_by_ip()
+        return coordinates
     
-    async def search_location(self, query: str) -> Union[Tuple[Dict[str, Any], Dict[str, Any]], Tuple[str, Dict]]:
-        """Search for location information"""
-        return await self.get_weather(city=query, mode="search")
+    async def search_weather(self, timestamp, query: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Search Weather at a given day
+        
+        Args:
+            A time Stamp in format yyyy-MM-dd
+        """
+        return await self.get_weather(q=query, mode="search", dt=timestamp)
     
-    async def get_forecast(self, city: Optional[str] = None) -> Union[Tuple[Dict[str, Any], Dict[str, Any]], Tuple[str, Dict]]:
-        """Get weather forecast"""
-        return await self.get_weather(city=city, mode="forecast")
+    async def get_forecast(self, days: int, query: Optional[str] = None) -> Dict[str, Any]:
+        """Get weather forecast, format is set to True"""
+        if days < 1 or days > 14:
+            return {"error": "Forecast days must be in a proper range, 1 - 14"}
+        return await self.get_weather(q=query, mode="forecast", days=days)
     
-    async def get_current(self, city: Optional[str] = None) -> Union[Tuple[Dict[str, Any], Dict[str, Any]], Tuple[str, Dict]]:
-        """Get current weather"""
-        return await self.get_weather(city=city, mode="current")
+

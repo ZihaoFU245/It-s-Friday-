@@ -59,11 +59,15 @@ class Config(BaseSettings):
         "%(acstime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s",
         env="LOG_FORMAT"
     )
+
+    # for web accessing
+    user_agent: Union[None, str] = Field(None, env="USER-AGENT")
  
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parent / ".env",
         env_file_encoding='utf-8'
     )
+
 
     @field_validator('log_path')
     def validate_log_path(cls, value: Path) -> Path:

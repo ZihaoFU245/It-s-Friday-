@@ -10,8 +10,9 @@ if parent_dir not in sys.path:
 
 try:
     from skills.all_skills import (
-        fetch_weather,
-        get_weather_forecast,
+        _get_weather_now,
+        _get_weather_forecast,
+        _get_weather_at,
         get_unread_emails,
         send_email,
         get_upcoming_events,
@@ -20,8 +21,9 @@ try:
 except ImportError:
     # If running directly, try importing from current directory
     from all_skills import (
-        fetch_weather,
-        get_weather_forecast,
+        _get_weather_now,
+        _get_weather_forecast,
+        _get_weather_at,
         get_unread_emails,
         send_email,
         get_upcoming_events,
@@ -31,26 +33,81 @@ except ImportError:
 mcp = FastMCP("ITS-FRIDAY")
 
 @mcp.tool()
-async def get_weather(city: Optional[str] = None, mode: Optional[str] = "current") -> Union[Tuple[Dict[str, Any], Dict[str, Any]], Tuple[str, Dict]]:
+async def get_weather_now(q: Optional[str] = None, format: Optional[bool] = True) -> Dict[str, Any]:
     """
-    Get the weather condition at a specific city for 4 modes: ['current', 'forecast', 'search', 'history']
-    If City is not given, it will use the location in the config file,
-    and if in config file it is still not provided, the tool will use User's ip address to find the location, failed if User used a VPN!
+    Get the current weather for a given place (q), using format can provide you more information,
+    but usually formatted information is enough unless being expert
 
-    Input:
-        - city: Optinal[str, None]
-        - mode: Optional
-    Return:
-        - Success: A tuple with two dictionries, one is formatted, the other is raw (more information)
-        - Failed: A tuple with first a string having a failed message and an empty dictionary
+    Args:
+        q: Query parameter based on which data is sent back. It could be following:
+            * Latitude and Longitude (Decimal degree) e.g: q=48.8567,2.3508
+            * city name e.g.: q=Paris
+            * US zip e.g.: q=10001
+            * UK postcode e.g: q=SW1
+            * Canada postal code e.g: q=G2J
+            * metar:<metar code> e.g: q=metar:EGLL
+            * iata:<3 digit airport code> e.g: q=iata:DXB
+            * auto:ip IP lookup e.g: q=auto:ip
+            * IP address (IPv4 and IPv6 supported) e.g: q=100.0.0.1
+
+        format: if True, a simpler version will be given
+
+    Returns:
+        success: A dictionary contain information key-pair
+        failure: A dictionary has key "error" and error information
     """
-    formatted, raw = await fetch_weather(city, mode)
-    return formatted, raw
+    return await _get_weather_now(q, format)
+
 
 @mcp.tool()
-async def get_forecast(city: Optional[str] = None) -> Union[Tuple[Dict[str, Any], Dict[str, Any]], Tuple[str, Dict]]:
-    """Get weather forecast for a city"""
-    return await get_weather_forecast(city)
+async def get_weather_forecast(days: int, q: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Get the forecast weather for a given place (q) and days ahead.
+
+    Args:
+        days: A number between 1 and 14, the num of days to forecast
+
+        q: Query parameter based on which data is sent back. It could be following:
+            * Latitude and Longitude (Decimal degree) e.g: q=48.8567,2.3508
+            * city name e.g.: q=Paris
+            * US zip e.g.: q=10001
+            * UK postcode e.g: q=SW1
+            * Canada postal code e.g: q=G2J
+            * metar:<metar code> e.g: q=metar:EGLL
+            * iata:<3 digit airport code> e.g: q=iata:DXB
+            * auto:ip IP lookup e.g: q=auto:ip
+            * IP address (IPv4 and IPv6 supported) e.g: q=100.0.0.1
+
+    Returns:
+        success: A dictionary contain information key-pair
+        failure: A dictionary has key "error" and error information
+    """
+    return await _get_weather_forecast(q, days=days)
+
+@mcp.tool()
+async def get_weather_at(dt: str, q: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Get weather at a given day
+
+    Args:
+        dt: In the format of yyyy-MM-dd format and should be after 1st Jan, 2010, and no more than 14 days than present
+
+        q: Query parameter based on which data is sent back. It could be following:
+            * Latitude and Longitude (Decimal degree) e.g: q=48.8567,2.3508
+            * city name e.g.: q=Paris
+            * US zip e.g.: q=10001
+            * UK postcode e.g: q=SW1
+            * Canada postal code e.g: q=G2J
+            * metar:<metar code> e.g: q=metar:EGLL
+            * iata:<3 digit airport code> e.g: q=iata:DXB
+            * auto:ip IP lookup e.g: q=auto:ip
+            * IP address (IPv4 and IPv6 supported) e.g: q=100.0.0.1
+
+    Returns:
+        success: A dictionary contain information key-pair
+        failure: A dictionary has key "error" and error information
+    """
+    return await _get_weather_at(dt=dt, q=q)
 
 @mcp.tool()
 def check_unread_emails(max_results: int = 10) -> list:
