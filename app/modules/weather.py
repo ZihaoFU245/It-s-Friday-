@@ -5,12 +5,10 @@ import requests
 import asyncio
 import json
 from typing import Any, Dict, Tuple
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from config import Config
 import logging
+from .. import config
 
 class FetchWeather:
-    config: Config
     base_url: str
     api_key: str
     lang: str
@@ -19,8 +17,7 @@ class FetchWeather:
     logger: Any
 
     def __init__(self):
-        self.config = Config()
-        self.config.configure_logging()
+        self.config = config
         self.logger = logging.getLogger(__name__)
         self.base_url = self.config.weather_url
         self.api_key = self.config.weather_api_key
@@ -103,8 +100,7 @@ class FetchWeather:
     
 class Location:
     def __init__(self):
-        self.config = Config()
-        self.config.configure_logging()
+        self.config = config
         self.logger = logging.getLogger(__name__)
 
     

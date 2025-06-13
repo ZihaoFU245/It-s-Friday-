@@ -2,15 +2,12 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 import os
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '...'))
-from config import Config
 import logging
+from ... import config
 
 class GoogleBaseClient:
     def __init__(self, scopes: list[str]):
-        self.config = Config()
-        self.config.configure_logging()
+        self.config = config
         self.logger = logging.getLogger(__name__)
         self.creds: Credentials | None = None
         self.scopes = scopes
