@@ -8,6 +8,11 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
+# Import config and configure MCP-specific logging
+from app.config import Config
+config = Config()
+config.configure_mcp_logging()
+
 try:
     from skills.all_skills import (
         _get_weather_now,
@@ -30,9 +35,9 @@ except ImportError:
         list_drive_files
     )
 
-friday = FastMCP("ITS-FRIDAY")
+mcp = FastMCP("ITS-FRIDAY")
 
-@friday.tool()
+@mcp.tool()
 async def get_weather_now(q: Optional[str] = None, format: Optional[bool] = True) -> Dict[str, Any]:
     """
     Get the current weather for a given place (q), using format can provide you more information,
@@ -59,7 +64,7 @@ async def get_weather_now(q: Optional[str] = None, format: Optional[bool] = True
     return await _get_weather_now(q, format)
 
 
-@friday.tool()
+@mcp.tool()
 async def get_weather_forecast(days: int, q: Optional[str] = None) -> Dict[str, Any]:
     """
     Get the forecast weather for a given place (q) and days ahead.
@@ -82,12 +87,12 @@ async def get_weather_forecast(days: int, q: Optional[str] = None) -> Dict[str, 
         success: A dictionary contain information key-pair
         failure: A dictionary has key "error" and error information
     """
-    return await _get_weather_forecast(q, days=days)
+    return await _get_weather_forecast(days, q)
 
-@friday.tool()
+@mcp.tool()
 async def get_weather_at(dt: str, q: Optional[str] = None) -> Dict[str, Any]:
     """
-    Get weather at a given day
+    Get weather at a given day, if at past, this will provide weather at every hour interval
 
     Args:
         dt: In the format of yyyy-MM-dd format and should be after 1st Jan, 2010, and no more than 14 days than present
@@ -107,27 +112,27 @@ async def get_weather_at(dt: str, q: Optional[str] = None) -> Dict[str, Any]:
         success: A dictionary contain information key-pair
         failure: A dictionary has key "error" and error information
     """
-    return await _get_weather_at(dt=dt, q=q)
+    return await _get_weather_at(dt, q)
 
-@friday.tool()
+@mcp.tool()
 def check_unread_emails(max_results: int = 10) -> list:
     """Get unread emails from Gmail"""
     return get_unread_emails(max_results)
 
-@friday.tool()
+@mcp.tool()
 def send_email_tool(to: str, subject: str, body: str, html_body: Optional[str] = None) -> Dict[str, Any]:
     """Send an email via Gmail"""
     return send_email(to, subject, body, html_body)
 
-@friday.tool()
+@mcp.tool()
 def get_calendar_events(max_results: int = 10) -> list:
     """Get upcoming calendar events"""
     return get_upcoming_events(max_results)
 
-@friday.tool()
+@mcp.tool()
 def get_drive_files(page_size: int = 10) -> list:
     """List Google Drive files"""
     return list_drive_files(page_size)
 
 if __name__ == "__main__":
-    friday.run()
+    mcp.run()

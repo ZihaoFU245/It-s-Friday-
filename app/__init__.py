@@ -6,8 +6,9 @@ from .config import Config
 
 # Create a single Config instance for the entire application
 config = Config()
-# Configure logging once at application startup
-config.configure_logging()
+# Note: Logging configuration is now handled by each entry point
+# - FastAPI: configured in main.py
+# - MCP Server: configured in skills/server.py
 
 from .modules import FetchWeather, GmailClient, CalendarClient, DriveClient
 from .services import WeatherService, EmailService, CalendarService, DriveService

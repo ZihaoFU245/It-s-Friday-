@@ -9,10 +9,11 @@ services from the main app package, providing a clean separation of
 concerns between the core application and the MCP interface.
 """
 
-from skills.server import friday
+from skills.server import mcp
 from skills.all_skills import (
-    get_weather_now,
-    get_weather_forecast,
+    _get_weather_now,
+    _get_weather_forecast,
+    _get_weather_at,
     get_unread_emails,
     send_email,
     get_upcoming_events,
@@ -20,7 +21,7 @@ from skills.all_skills import (
 )
 
 __all__ = [
-    'friday',
+    'mcp',
     'get_weather_now',
     'get_weather_forecast', 
     'get_unread_emails',

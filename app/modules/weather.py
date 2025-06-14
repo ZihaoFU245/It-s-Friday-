@@ -47,8 +47,11 @@ class FetchWeather:
                 resp.raise_for_status()
                 raw = await resp.json()
                 
-                if format:                    
-                    return self._format_normal(raw)
+                if format:
+                    if mode == "current" or mode == "forecast":                    
+                        return self._format_normal(raw)
+                    elif mode == "history":
+                        return self._format_at(raw)
                 else:
                     return raw
                 
@@ -91,6 +94,31 @@ class FetchWeather:
             "air_quality": self._format_air_quality(current.get('air_quality', {})),            
             "unit": f"°{temp_unit.upper()}"
         }
+
+    def _format_at(self, raw: Dict[str, Any]) ->Dict[str, Any]:
+        """
+        Format the raw weather data returned by get_weather_at for past, present, and future dates.
+        """
+        if not raw or "location" not in raw or "forecast" not in raw:
+            return {"error": "Invalid weather data"}
+
+        location = raw["location"]
+        forecast_days = raw["forecast"].get("forecastday", [])
+        if not forecast_days:
+            return {"error": "No forecast data available"}
+
+        # Always use the first (and usually only) forecastday
+        day_data = forecast_days[0]
+        result = {
+            "city": location.get("name"),
+            "region": location.get("region"),
+            "country": location.get("country"),
+            "date": day_data.get("date"),
+            "day": day_data.get("day", {}),
+            "astro": day_data.get("astro", {}),
+            "hourly": day_data.get("hour", []),
+        }
+        return result
         
     def _format_air_quality(self, air_quality: Dict[str, Any]) -> Dict[str, Any]:
         return {

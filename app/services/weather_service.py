@@ -73,7 +73,7 @@ class WeatherService:
                 
         except Exception as e:
             error_msg = f"Weather service error: {str(e)}"
-            return error_msg, {}
+            return {"error": error_msg}
     
     async def _resolve_location(self, q: Optional[str]) -> str:
         """
@@ -92,22 +92,22 @@ class WeatherService:
             return config_location
         
         # 3. Fallback to IP-based location detection
-        coordinates = self.location_service.get_location_by_ip()
+        coordinates = await self.location_service.get_location_by_ip()
         return coordinates
     
-    async def search_weather(self, timestamp, query: Optional[str] = None) -> Dict[str, Any]:
+    async def weather_at(self, timestamp, query: Optional[str] = None) -> Dict[str, Any]:
         """
         Search Weather at a given day
         
         Args:
             A time Stamp in format yyyy-MM-dd
         """
-        return await self.get_weather(q=query, mode="search", dt=timestamp)
+        return await self.get_weather(query, "history", dt=timestamp)
     
     async def get_forecast(self, days: int, query: Optional[str] = None) -> Dict[str, Any]:
         """Get weather forecast, format is set to True"""
         if days < 1 or days > 14:
             return {"error": "Forecast days must be in a proper range, 1 - 14"}
-        return await self.get_weather(q=query, mode="forecast", days=days)
+        return await self.get_weather(query, "forecast", days=days)
     
 

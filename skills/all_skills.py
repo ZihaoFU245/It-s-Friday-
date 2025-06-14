@@ -28,14 +28,14 @@ async def _get_weather_forecast(
         q: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Get weather forecast using service layer"""
-    return await weather_service.get_forecast(q=q, days=days)
+    return await weather_service.get_forecast(days, q)
 
 async def _get_weather_at(
         dt: str,
         q: Optional[str] = None
 ) -> Dict[str, Any]:
     """Get weather at a given time stamp"""
-    return await weather_service.search_weather(dt, q)
+    return await weather_service.weather_at(dt, q)
 
 # Email operations using service layer  
 def get_unread_emails(max_results: int = 10):

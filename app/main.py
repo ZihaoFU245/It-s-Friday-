@@ -6,10 +6,14 @@ from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from .config import update_keys
 from . import config
+
+# Configure logging for FastAPI application
+config.configure_fastapi_logging()
+
 from .security import verify_token
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from . import weather_service, email_service
+from . import weather_service, email_service, calendar_service, drive_service
 
 app = FastAPI()
 
@@ -24,6 +28,10 @@ app.add_middleware(
 class APIKeyRequest(BaseModel):
     key: str
     value: str
+
+class ForecastRequest(BaseModel):
+    days: int
+    location: Optional[str] = None
 
 @app.get('/')
 async def root():
@@ -43,23 +51,41 @@ async def set_key(
     return {"message": f"Key '{request.key}' updated successfully"}
 
 
-@app.get('/weather')
+@app.post('/weather')
 async def get_weather_endpoint(
-    city: Optional[str] = None,
+    request: ForecastRequest,
     mode: str = "current",
     _: None = Depends(verify_token)
 ):
-    """Get weather using the service layer"""
-    formatted, raw = await weather_service.get_weather(city, mode)
-    if isinstance(formatted, str):  # Error case
-        raise HTTPException(status_code=400, detail=formatted)
-    return {"formatted": formatted, "raw": raw}
+    """Get weather using the service layer - generic endpoint"""
+    result = await weather_service.get_weather(request.location, mode)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
 
-@app.get('/emails/unread')
-async def get_unread_emails_endpoint(
-    max_results: int = 10,
+@app.get('/weather/now')
+async def get_weather_now_endpoint(
+    q: str,
+    format: Optional[bool] = True,
     _: None = Depends(verify_token)
 ):
-    """Get unread emails using the service layer"""
-    emails = email_service.get_unread_messages(max_results)
-    return {"emails": emails}
+    """Get current weather for a given location"""
+    result = await weather_service.get_weather(q, mode="current", format=format)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+@app.post('/weather/forecast')
+async def get_weather_forecast_endpoint(
+    request: ForecastRequest,
+    _: None = Depends(verify_token)
+):
+    """Get weather forecast for specified days ahead"""
+    if request.days < 1 or request.days > 14:
+        raise HTTPException(status_code=400, detail="Forecast days must be between 1 and 14")
+    
+    result = await weather_service.get_forecast(request.days, request.location)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+

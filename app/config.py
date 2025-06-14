@@ -124,11 +124,36 @@ class Config(BaseSettings):
                 },
             }
         }
-
-    def configure_logging(self) -> None:
-        """Configure logging system using the current settings"""
+    
+    def configure_fastapi_logging(self) -> None:
+        """Configure verbose logging for FastAPI application"""
         logging.config.dictConfig(self.logging_config)
         logging.captureWarnings(True)
+    
+    def configure_mcp_logging(self) -> None:
+        """Configure minimal logging for MCP server to prevent JSON-RPC parsing issues"""
+        # This must be done BEFORE importing any modules that might log
+        logging.basicConfig(level=logging.CRITICAL, format='%(message)s')
+        
+        # Suppress all MCP-related verbose logging
+        loggers_to_suppress = [
+            "fastmcp",
+            "mcp",
+            "mcp.server", 
+            "mcp.server.lowlevel",
+            "mcp.server.lowlevel.server",
+            "asyncio",
+            "urllib3",
+            "requests"
+        ]
+        
+        for logger_name in loggers_to_suppress:
+            logging.getLogger(logger_name).setLevel(logging.CRITICAL)
+        
+        # Completely disable debug and info logging for all loggers
+        logging.disable(logging.DEBUG)
+        logging.disable(logging.INFO)
+        
 
 def update_keys(key: str, value: str):
     """
