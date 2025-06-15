@@ -179,7 +179,4 @@ def update_keys(key: str, value: str):
             f.write('\n')
         f.write(f"{key}={value}\n")
 
-if __name__ == "__main__":
-    config = Config()
-    print(config.weather_api_key)
-    print(config.test_key)
+
