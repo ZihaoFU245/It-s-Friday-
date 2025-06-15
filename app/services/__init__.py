@@ -12,13 +12,13 @@ even when underlying modules change.
 """
 
 from .weather_service import WeatherService
-from .email_service import EmailService
+from .email_manager import EmailManager
 from .calendar_service import CalendarService
 from .drive_service import DriveService
 
 __all__ = [
     'WeatherService',
-    'EmailService', 
+    'EmailManager',
     'CalendarService',
     'DriveService'
 ]

@@ -1,0 +1,20 @@
+{
+  "personal": {
+    "name": "personal",
+    "provider": "gmail",
+    "display_name": "Personal Gmail Account",
+    "google_credentials_path": "secrets/credentials_personal.json",
+    "google_token_path": "secrets/token_personal.json",
+    "enabled": true,
+    "default_account": true
+  },
+  "work": {
+    "name": "work",
+    "provider": "gmail", 
+    "display_name": "Work Gmail Account",
+    "google_credentials_path": "secrets/credentials_work.json",
+    "google_token_path": "secrets/token_work.json",
+    "enabled": true,
+    "default_account": false
+  }
+}

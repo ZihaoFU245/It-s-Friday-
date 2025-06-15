@@ -1,57 +1,47 @@
 """
-Skills using the Service Layer
+All Skills Module - Compatibility Layer
 
-This module now uses the clean service layer instead of directly 
-accessing modules. This provides better abstraction and stability.
+This module provides backward compatibility by importing from the refactored
+skill modules. New code should import directly from the specific skill modules:
+- weather_skills
+- email_skills  
+- calendar_skills
+- drive_skills
 
-The skills module imports services from the main app package to
-access weather, email, calendar, and drive functionality.
+This compatibility layer will be maintained to avoid breaking existing imports.
 """
 
-# Import services from the main app package
-from app import weather_service, email_service, calendar_service, drive_service
-from typing import Optional, Union, Tuple, Dict, Any
+# Import from refactored skill modules
+from .weather_skills import (
+    get_weather_now as _get_weather_now,
+    get_weather_forecast as _get_weather_forecast,
+    get_weather_at as _get_weather_at
+)
 
-# Weather operations using service layer
-async def _get_weather_now(
-        q: Optional[str] = None, 
-        format: Optional[bool] = True,
-) -> Dict[str, Any]:
-    """
-    Fetch weather using the weather service.
-    Now provider-agnostic and with better error handling.
-    """
-    return await weather_service.get_weather(q=q, format=format)
+from .email_skills import (
+    get_unread_emails,
+    get_all_unread_emails,
+    send_email,
+    count_unread_emails,
+    count_all_unread_emails,
+    get_email_accounts,
+    mark_emails_as_read,
+    mark_emails_as_unread,
+    delete_email,
+    create_draft,
+    update_draft,
+    send_draft,
+    list_drafts,
+    get_draft,
+    delete_draft
+)
 
-async def _get_weather_forecast(
-        days: int,
-        q: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Get weather forecast using service layer"""
-    return await weather_service.get_forecast(days, q)
+from .calendar_skills import (
+    get_upcoming_events
+)
 
-async def _get_weather_at(
-        dt: str,
-        q: Optional[str] = None
-) -> Dict[str, Any]:
-    """Get weather at a given time stamp"""
-    return await weather_service.weather_at(dt, q)
+from .drive_skills import (
+    list_drive_files
+)
 
-# Email operations using service layer  
-def get_unread_emails(max_results: int = 10):
-    """Get unread emails using service layer"""
-    return email_service.get_unread_messages(max_results=max_results)
 
-def send_email(to: str, subject: str, body: str, html_body: Optional[str] = None):
-    """Send email using service layer"""
-    return email_service.send_email(to=to, subject=subject, body=body, html_body=html_body)
-
-# Calendar operations using service layer
-def get_upcoming_events(max_results: int = 10):
-    """Get upcoming calendar events using service layer"""
-    return calendar_service.get_upcoming_events(max_results=max_results)
-
-# Drive operations using service layer
-def list_drive_files(page_size: int = 10):
-    """List Google Drive files using service layer"""
-    return drive_service.list_files(page_size=page_size)

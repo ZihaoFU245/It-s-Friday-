@@ -9,7 +9,7 @@ The skills module exposes Friday's core functionality as tools that AI assistant
 ## Features
 
 - **Weather Operations**: Get current weather, forecasts, and location-based weather data
-- **Email Management**: Send emails and retrieve unread messages via Gmail
+- **Email Management**: Send emails and retrieve unread messages via multi-account EmailManager
 - **Calendar Integration**: Access and manage Google Calendar events
 - **Drive Access**: List and manage Google Drive files
 
@@ -27,23 +27,26 @@ The server will start and expose all available tools through the FastMCP framewo
 
 1. **get_weather(city, mode)** - Get weather information
 2. **get_forecast(city)** - Get weather forecast
-3. **check_unread_emails(max_results)** - Get unread emails
-4. **send_email_tool(to, subject, body, html_body)** - Send emails
-5. **get_calendar_events(max_results)** - Get calendar events
-6. **get_drive_files(page_size)** - List drive files
+3. **get_unread_emails_from_account(account, max_results)** - Get unread emails from specific account
+4. **get_unread_emails_all_accounts(max_results_per_account)** - Get unread emails from all accounts
+5. **send_email_from_account(to, subject, body, account)** - Send emails from specific account
+6. **list_email_accounts()** - List configured email accounts
+7. **get_calendar_events(max_results)** - Get calendar events
+8. **get_drive_files(page_size)** - List drive files
 
 ## Architecture
 
 The skills module imports services from the main `app` package:
 
 ```python
-from app import weather_service, email_service, calendar_service, drive_service
+from app import weather_service, email_manager, calendar_service, drive_service
 ```
 
 This provides a clean separation where:
 - The `app` package contains the core business logic and services
 - The `skills` module provides the MCP interface layer
 - AI assistants interact only with the skills module
+- EmailManager handles multi-account email operations seamlessly
 
 ## Configuration
 
