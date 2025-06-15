@@ -4,7 +4,7 @@ from .google_base_client import GoogleBaseClient
 class DriveClient(GoogleBaseClient):
     def __init__(self):
         scopes = ["https://www.googleapis.com/auth/drive"]
-        super().__init__(scopes)
+        super().__init__(scopes, service_name="Drive")
         self.service = build("drive", "v3", credentials=self.creds)
 
     def list_files(self, page_size: int = 10):

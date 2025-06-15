@@ -6,7 +6,7 @@ import datetime
 class CalendarClient(GoogleBaseClient):
     def __init__(self):
         scopes = ["https://www.googleapis.com/auth/calendar"]
-        super().__init__(scopes)
+        super().__init__(scopes, service_name="Calendar")
         self.service = build("calendar", "v3", credentials=self.creds)
 
     def list_events(self, max_results: int = 10, time_min: datetime.datetime | None = None):
