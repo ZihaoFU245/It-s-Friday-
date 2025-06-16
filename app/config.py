@@ -94,6 +94,9 @@ class Config(BaseSettings):
     )
     # for web accessing
     user_agent: Union[None, str] = Field(None, env="USER-AGENT")
+
+    BASE_DIR: Path = Path(__file__).resolve().parent
+    db_path: str = f"sqlite:///{(BASE_DIR / 'db/app.db').resolve()}"
  
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parent / ".env",

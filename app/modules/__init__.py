@@ -8,3 +8,4 @@ from .google_clients import (
     CalendarClient,
     DriveClient
 )
+from .contact_booklet import ContactManager
