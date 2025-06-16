@@ -67,36 +67,23 @@ class Config(BaseSettings):
     weather_url: str = Field("http://api.weatherapi.com/v1", env="WEATHER_URL")
     lang: str = Field("en", env="LANG")
     timeout: int = Field(10, env="TIMEOUT")
-    temp_unit: str = Field("c", env="TEMP_UNIT")
-
+    temp_unit: str = Field("c", env="TEMP_UNIT")    
+    
     # PLATFORM & Location
     platform: str = Field(default_factory=lambda: os.environ.get("PLATFORM", "local"), env="PLATFORM")
     location: Union[None, str] = Field(default=None, env="LOCATION")
-      
-    # Google API (For backward compatibility with single-account code)
-    google_credentials_path: Path = Field(Path(__file__).parent / "secrets" / "credentials.json", env="GOOGLE_CREDENTIALS_PATH")
-    google_token_path: Path = Field(Path(__file__).parent / "secrets" / "token.json", env="GOOGLE_TOKEN_PATH")
 
-    # Email Accounts Configuration
+    # Email Accounts Configuration (DEPRECATED - Now managed by EmailAccountManager)
+    # This field is kept for backward compatibility but is no longer used
     email_accounts: Dict[str, EmailAccountConfig] = Field(
-        default_factory=lambda: {
-            "default": EmailAccountConfig(
-                name="default",
-                provider="gmail",
-                display_name="Default Gmail Account",
-                google_credentials_path=Path(__file__).parent / "secrets" / "credentials.json",
-                google_token_path=Path(__file__).parent / "secrets" / "token.json",
-                enabled=True,
-                default_account=True
-            )
-        },
-        description="Configuration for multiple email accounts"
+        default_factory=dict,
+        description="DEPRECATED: Email accounts are now managed by EmailAccountManager"
     )
     
     # Default email account name (for backward compatibility)
     default_email_account: str = Field("default", env="DEFAULT_EMAIL_ACCOUNT")
 
-    # logging ocnfiguration
+    # logging configuration
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field("INFO", env="LOG_LEVEL")
     log_path: Path = Field(Path(__file__).parent / "logs" / "app.log", env="LOG_PATH")
     log_max_size: int = Field(10, description="max log file size in MB", env="LOG_MAX_SIZE")
@@ -105,7 +92,6 @@ class Config(BaseSettings):
         "%(acstime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s",
         env="LOG_FORMAT"
     )
-
     # for web accessing
     user_agent: Union[None, str] = Field(None, env="USER-AGENT")
  
@@ -115,39 +101,8 @@ class Config(BaseSettings):
     )
 
     def __init__(self, **kwargs):
-        """Initialize config and load email accounts from JSON file if it exists."""
+        """Initialize config. Email accounts are now managed by EmailAccountManager."""
         super().__init__(**kwargs)
-        self._load_email_accounts_from_file()
-
-    def _load_email_accounts_from_file(self):
-        """Load email accounts from JSON file if it exists."""
-        config_file = Path(__file__).parent / "email_accounts.json"
-        
-        if config_file.exists():
-            try:
-                import json
-                with open(config_file, 'r') as f:
-                    accounts_data = json.load(f)
-                
-                loaded_accounts = {}
-                for name, data in accounts_data.items():
-                    loaded_accounts[name] = EmailAccountConfig(
-                        name=data["name"],
-                        provider=data["provider"],
-                        display_name=data.get("display_name", ""),
-                        google_credentials_path=Path(data["google_credentials_path"]) if data.get("google_credentials_path") else None,
-                        google_token_path=Path(data["google_token_path"]) if data.get("google_token_path") else None,
-                        enabled=data.get("enabled", True),
-                        default_account=data.get("default_account", False)
-                    )
-                
-                # Update email_accounts with loaded data
-                if loaded_accounts:
-                    self.email_accounts = loaded_accounts
-                    
-            except Exception as e:
-                # If loading fails, keep the default configuration
-                pass
 
     @field_validator('log_path')
     def validate_log_path(cls, value: Path) -> Path:
@@ -233,44 +188,41 @@ class Config(BaseSettings):
         
         for logger_name in loggers_to_suppress:
             logging.getLogger(logger_name).setLevel(logging.CRITICAL)
-        
         # Completely disable debug and info logging for all loggers
         logging.disable(logging.DEBUG)
         logging.disable(logging.INFO)
     
+    # DEPRECATED METHODS - Kept for backward compatibility
+    # These methods now delegate to EmailAccountManager
+    
     def get_email_account_config(self, account_name: str) -> Optional[EmailAccountConfig]:
-        """Get configuration for a specific email account."""
-        return self.email_accounts.get(account_name)
+        """
+        DEPRECATED: Get configuration for a specific email account.
+        Use EmailAccountManager.get_account_config() instead.
+        """
+        from .utils import EmailAccountManager
+        # Create a temporary manager to access accounts
+        manager = EmailAccountManager(self)
+        return manager.get_account_config(account_name)
     
     def get_default_email_account(self) -> Optional[EmailAccountConfig]:
-        """Get the default email account configuration."""
-        # First try to find explicitly marked default
-        for account in self.email_accounts.values():
-            if account.default_account and account.enabled:
-                return account
-        
-        # Fall back to default_email_account setting
-        return self.get_email_account_config(self.default_email_account)
+        """
+        DEPRECATED: Get the default email account configuration.
+        Use EmailAccountManager.get_default_account_name() instead.
+        """
+        from .utils import EmailAccountManager
+        # Create a temporary manager to access accounts
+        manager = EmailAccountManager(self)
+        default_name = manager.get_default_account_name()
+        return manager.get_account_config(default_name) if default_name else None
     
     def list_email_accounts(self, enabled_only: bool = True) -> List[EmailAccountConfig]:
-        """List all configured email accounts."""
-        accounts = list(self.email_accounts.values())
-        if enabled_only:
-            accounts = [acc for acc in accounts if acc.enabled]
-        return accounts
-    
-    def add_email_account(self, account_config: EmailAccountConfig) -> None:
-        """Add a new email account configuration."""
-        self.email_accounts[account_config.name] = account_config
-    
-    def remove_email_account(self, account_name: str) -> bool:
-        """Remove an email account configuration."""
-        if account_name in self.email_accounts:
-            del self.email_accounts[account_name]
-            return True
-        return False
-        
-
-
-
-
+        """
+        DEPRECATED: List all configured email accounts.
+        Use EmailAccountManager.list_account_names() instead.
+        """
+        from .utils import EmailAccountManager
+        # Create a temporary manager to access accounts
+        manager = EmailAccountManager(self)
+        account_names = manager.list_account_names(enabled_only)
+        return [manager.get_account_config(name) for name in account_names if manager.get_account_config(name)]

@@ -28,10 +28,17 @@ class GmailClient(GoogleBaseClient):
         - Sync with Gmail using history API
         - Batch operations for efficiency    Category options: 'PRIMARY', 'PROMOTIONS', 'SOCIAL', 'UPDATES'
     All time filters are in hours (default: 12).
-    All methods log errors using the configured logger.
+    All methods log errors using the configured logger.    
     """
     
-    def __init__(self):
+    def __init__(self, credentials_path: str, token_path: str):
+        """
+        Initialize Gmail client with account-specific authentication paths.
+        
+        Args:
+            credentials_path: Path to Google credentials JSON file (required)
+            token_path: Path to Google token JSON file (required)
+        """
         scopes = [
             "https://www.googleapis.com/auth/gmail.readonly",
             "https://www.googleapis.com/auth/gmail.send",
@@ -39,7 +46,8 @@ class GmailClient(GoogleBaseClient):
             "https://www.googleapis.com/auth/gmail.modify",
             "https://www.googleapis.com/auth/gmail.labels"
         ]
-        super().__init__(scopes, service_name="Gmail")
+        super().__init__(scopes, credentials_path=credentials_path, token_path=token_path, 
+                        service_name="Gmail")
         self.service = build("gmail", "v1", credentials=self.creds)
         self.user_id = "me"  # Default to authenticated user
 

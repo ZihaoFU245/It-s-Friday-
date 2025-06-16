@@ -34,13 +34,30 @@ class GmailClientAdapter(BaseEmailClient):
         Initialize the Gmail client adapter.
         
         Args:
-            config: Configuration object (Config class instance) - currently not used
-                   but accepted for future compatibility and consistency with other adapters
+            config: EmailConfig object containing account-specific configuration (required)
             **kwargs: Additional keyword arguments for future extensibility
         """
         super().__init__()
         self.config = config  # Store for future use if needed
-        self._gmail_client = GoogleGmailClient()
+        
+        # Extract Google-specific paths from config
+        if not config:
+            raise ValueError("EmailConfig is required for Gmail client initialization")
+        
+        if not hasattr(config, 'google_credentials_path') or not config.google_credentials_path:
+            raise ValueError("Google credentials path is required for Gmail client")
+        
+        if not hasattr(config, 'google_token_path') or not config.google_token_path:
+            raise ValueError("Google token path is required for Gmail client")
+        
+        credentials_path = str(config.google_credentials_path)
+        token_path = str(config.google_token_path)
+        
+        # Initialize Gmail client with required account-specific paths
+        self._gmail_client = GoogleGmailClient(
+            credentials_path=credentials_path,
+            token_path=token_path
+        )
         self.logger = logging.getLogger(__name__)
     
     # ========================================

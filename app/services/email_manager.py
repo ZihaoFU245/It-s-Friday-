@@ -14,8 +14,9 @@ Features:
 
 import logging
 from typing import Dict, List, Optional, Any, Union
-from ..config import Config, EmailAccountConfig
-from .email_service import EmailService
+from ..config import Config
+from ..modules.email_clients import BaseEmailClient
+from ..utils import EmailAccountManager
 
 
 class EmailManager:
@@ -45,8 +46,7 @@ class EmailManager:
             subject="Meeting",
             body="Let's meet tomorrow"
         )
-        
-        # Get unread from all accounts
+          # Get unread from all accounts
         all_unread = email_manager.get_all_unread_messages()
         
         # Get unread from specific account
@@ -61,10 +61,9 @@ class EmailManager:
             config: Configuration object containing email account settings
         """
         self.config = config
-        self.logger = logging.getLogger(__name__)
-        
-        # Dictionary to store EmailService instances
-        self._email_services: Dict[str, EmailService] = {}
+        self.logger = logging.getLogger(__name__)        
+        # Use EmailAccountManager for client management
+        self.account_manager = EmailAccountManager(config)
         
         # Cache for account information
         self._account_info_cache: Dict[str, Dict[str, Any]] = {}
@@ -76,61 +75,25 @@ class EmailManager:
         """Get list of available account names."""
         return [acc.name for acc in self.config.list_email_accounts(enabled_only=True)]
     
-    def get_email_service(self, account_name: str) -> EmailService:
+    def get_email_client(self, account_name: str) -> BaseEmailClient:
         """
-        Get or create EmailService for a specific account.
+        Get email client for a specific account using the AccountManager.
         
         Args:
             account_name: Name of the email account
             
         Returns:
-            EmailService instance for the account
+            BaseEmailClient instance for the account
             
         Raises:
-            ValueError: If account is not configured or disabled
+            ValueError: If account is not configured, disabled, or client creation fails
         """
-        if account_name not in self._email_services:
-            account_config = self.config.get_email_account_config(account_name)
-            
-            if not account_config:
-                raise ValueError(f"Email account '{account_name}' not configured")
-            
-            if not account_config.enabled:
-                raise ValueError(f"Email account '{account_name}' is disabled")
-            
-            # Create modified config for this account
-            account_specific_config = self._create_account_config(account_config)
-            
-            self._email_services[account_name] = EmailService(
-                config=account_specific_config,
-                provider=account_config.provider
-            )
-            
-            self.logger.info(f"Created EmailService for account '{account_name}' ({account_config.provider})")
-        
-        return self._email_services[account_name]
-    
-    def _create_account_config(self, account_config: EmailAccountConfig) -> Config:
-        """
-        Create a Config instance with account-specific settings.
-        
-        Args:
-            account_config: Configuration for the specific account
-            
-        Returns:
-            Config instance with account-specific settings
-        """
-        # Create a copy of the main config
-        config_dict = self.config.model_dump()
-        
-        # Override with account-specific settings
-        if account_config.google_credentials_path:
-            config_dict['google_credentials_path'] = account_config.google_credentials_path
-        if account_config.google_token_path:
-            config_dict['google_token_path'] = account_config.google_token_path
-        
-        # Create new Config instance with account-specific settings
-        return Config(**config_dict)
+        try:
+            # Try to get existing client first
+            return self.account_manager.get_email_client(account_name)
+        except ValueError:
+            # If client doesn't exist, create it
+            return self.account_manager.create_email_client(account_name)
     
     def get_default_account(self) -> str:
         """
@@ -176,30 +139,47 @@ class EmailManager:
             html_body: HTML body (optional)
             attachments: File attachments (optional)
             **kwargs: Additional arguments for the email service
-            
-        Returns:
+              Returns:
             Dict with send result and account information
         """
         try:
             if account is None:
                 account = self.get_default_account()
             
-            email_service = self.get_email_service(account)
+            # Check if account exists in our configuration
+            account_config = self.account_manager.get_account_config(account)
+            if not account_config:
+                return {
+                    'success': False,
+                    'error': 'accounts must be added before use',
+                    'account': account,
+                    'manager': 'EmailManager'
+                }
             
-            result = await email_service.send_email(
+            email_client = self.get_email_client(account)
+            
+            result = email_client.send_email(
                 to=to,
                 subject=subject,
                 body=body,
                 cc=cc,
                 bcc=bcc,
                 html_body=html_body,
-                attachments=attachments,
-                **kwargs
+                attachments=attachments
             )
             
             # Add account information to result
-            result['account'] = account
-            result['manager'] = 'EmailManager'
+            if isinstance(result, dict):
+                result['account'] = account
+                result['manager'] = 'EmailManager'
+            else:
+                # If result is not a dict, create a standardized response
+                result = {
+                    'success': True,
+                    'account': account,
+                    'manager': 'EmailManager',
+                    'result': result
+                }
             
             return result
             
@@ -229,22 +209,29 @@ class EmailManager:
             account: Account name (uses default if not specified)
             max_results: Maximum number of messages to return
             **kwargs: Additional arguments for the email service
-            
-        Returns:
+              Returns:
             List of unread messages with account information
         """
         try:
             if account is None:
                 account = self.get_default_account()
             
-            email_service = self.get_email_service(account)
-            messages = email_service.get_unread_messages(max_results=max_results, **kwargs)
+            # Check if account exists in our configuration
+            account_config = self.account_manager.get_account_config(account)
+            if not account_config:
+                self.logger.error(f"Account '{account}' not found in configuration")
+                return []
+            
+            email_client = self.get_email_client(account)
+            messages = email_client.get_unread_messages(max_results=max_results)
             
             # Add account information to each message
-            for message in messages:
-                message['account'] = account
+            if isinstance(messages, list):
+                for message in messages:
+                    if isinstance(message, dict):
+                        message['account'] = account
             
-            return messages
+            return messages if isinstance(messages, list) else []
             
         except Exception as e:
             self.logger.error(f"Failed to get unread messages from account '{account}': {e}")
@@ -282,19 +269,22 @@ class EmailManager:
         
         Args:
             account: Account name (uses default if not specified)
-            
-        Returns:
+              Returns:
             Dict with unread count and account information
         """
         try:
             if account is None:
                 account = self.get_default_account()
             
-            email_service = self.get_email_service(account)
-            result = email_service.count_unread_messages()
-            result['account'] = account
+            email_client = self.get_email_client(account)
+            count = email_client.count_unread_messages()
             
-            return result
+            # Return standardized format
+            return {
+                'success': True,
+                'count': count if isinstance(count, int) else 0,
+                'account': account
+            }
             
         except Exception as e:
             self.logger.error(f"Failed to count unread messages from account '{account}': {e}")
@@ -329,8 +319,7 @@ class EmailManager:
         
         Args:
             account: Account name (uses default if not specified)
-            
-        Returns:
+              Returns:
             Dict with account information
         """
         try:
@@ -340,8 +329,14 @@ class EmailManager:
             if account in self._account_info_cache:
                 return self._account_info_cache[account]
             
-            email_service = self.get_email_service(account)
-            info = email_service.get_provider_info()
+            email_client = self.get_email_client(account)
+            
+            # Get profile information from the client
+            if hasattr(email_client, 'get_profile'):
+                info = email_client.get_profile()
+            else:
+                info = {'email_address': 'unknown', 'display_name': 'Unknown'}
+            
             info['account_name'] = account
             
             # Cache the information
@@ -377,19 +372,26 @@ class EmailManager:
         
         Args:
             account: Account name to validate
-            
-        Returns:
+              Returns:
             Dict with validation result
         """
         try:
-            email_service = self.get_email_service(account)
-            info = email_service.get_provider_info()
+            email_client = self.get_email_client(account)
+            
+            # Try to get profile to validate connection
+            if hasattr(email_client, 'get_profile'):
+                info = email_client.get_profile()
+                email_address = info.get('email_address', 'unknown')
+            else:
+                email_address = 'unknown'
+            
+            account_config = self.config.get_email_account_config(account)
             
             return {
                 'success': True,
                 'account': account,
-                'provider': info.get('provider'),
-                'email_address': info.get('email_address'),
+                'provider': account_config.provider if account_config else 'unknown',
+                'email_address': email_address,
                 'valid': True
             }
             
@@ -430,20 +432,23 @@ class EmailManager:
         Args:
             message_ids: Message ID(s) to mark as read
             account: Account name (uses default if not specified)
-            
-        Returns:
+              Returns:
             Dict with operation result and account information
         """
         try:
             if account is None:
                 account = self.get_default_account()
             
-            email_service = self.get_email_service(account)
-            result = email_service.mark_as_read(message_ids)
-            result['account'] = account
-            result['manager'] = 'EmailManager'
+            email_client = self.get_email_client(account)
+            success = email_client.mark_as_read(message_ids)
             
-            return result
+            return {
+                'success': success,
+                'message_ids': message_ids if isinstance(message_ids, list) else [message_ids],
+                'operation': 'mark_as_read',
+                'account': account,
+                'manager': 'EmailManager'
+            }
             
         except Exception as e:
             self.logger.error(f"Failed to mark messages as read from account '{account}': {e}")
@@ -465,20 +470,23 @@ class EmailManager:
         Args:
             message_ids: Message ID(s) to mark as unread
             account: Account name (uses default if not specified)
-            
-        Returns:
+              Returns:
             Dict with operation result and account information
         """
         try:
             if account is None:
                 account = self.get_default_account()
             
-            email_service = self.get_email_service(account)
-            result = email_service.mark_as_unread(message_ids)
-            result['account'] = account
-            result['manager'] = 'EmailManager'
+            email_client = self.get_email_client(account)
+            success = email_client.mark_as_unread(message_ids)
             
-            return result
+            return {
+                'success': success,
+                'message_ids': message_ids if isinstance(message_ids, list) else [message_ids],
+                'operation': 'mark_as_unread',
+                'account': account,
+                'manager': 'EmailManager'
+            }
             
         except Exception as e:
             self.logger.error(f"Failed to mark messages as unread from account '{account}': {e}")
@@ -502,20 +510,24 @@ class EmailManager:
             message_id: Message ID to delete
             account: Account name (uses default if not specified)
             permanent: Whether to permanently delete (vs move to trash)
-            
-        Returns:
+              Returns:
             Dict with operation result and account information
         """
         try:
             if account is None:
                 account = self.get_default_account()
             
-            email_service = self.get_email_service(account)
-            result = email_service.delete_message(message_id, permanent)
-            result['account'] = account
-            result['manager'] = 'EmailManager'
+            email_client = self.get_email_client(account)
+            success = email_client.delete_message(message_id, permanent)
             
-            return result
+            return {
+                'success': success,
+                'message_id': message_id,
+                'permanent': permanent,
+                'operation': 'delete_message',
+                'account': account,
+                'manager': 'EmailManager'
+            }
             
         except Exception as e:
             self.logger.error(f"Failed to delete message from account '{account}': {e}")
@@ -553,16 +565,25 @@ class EmailManager:
             bcc: BCC recipients (optional)
             html_body: HTML body (optional)
             attachments: File attachments (optional)
-            
-        Returns:
+              Returns:
             Dict with draft creation result and account information
         """
         try:
             if account is None:
                 account = self.get_default_account()
             
-            email_service = self.get_email_service(account)
-            result = email_service.create_draft(
+            email_client = self.get_email_client(account)
+            
+            # Check if the client supports drafts
+            if not hasattr(email_client, 'create_draft'):
+                return {
+                    'success': False,
+                    'error': f"Draft creation not supported by this email provider",
+                    'account': account,
+                    'manager': 'EmailManager'
+                }
+            
+            result = email_client.create_draft(
                 to=to,
                 subject=subject,
                 body=body,
@@ -571,8 +592,18 @@ class EmailManager:
                 html_body=html_body,
                 attachments=attachments
             )
-            result['account'] = account
-            result['manager'] = 'EmailManager'
+            
+            # Ensure result is a dict and add account info
+            if isinstance(result, dict):
+                result['account'] = account
+                result['manager'] = 'EmailManager'
+            else:
+                result = {
+                    'success': True,
+                    'draft_id': result,
+                    'account': account,
+                    'manager': 'EmailManager'
+                }
             
             return result
             
@@ -597,229 +628,108 @@ class EmailManager:
         html_body: Optional[str] = None,
         attachments: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        """
-        Update an existing draft in a specific account.
-        
-        Args:
-            draft_id: ID of the draft to update
-            to: Recipient email address(es)
-            subject: Email subject
-            body: Email body
-            account: Account name (uses default if not specified)
-            cc: CC recipients (optional)
-            bcc: BCC recipients (optional)
-            html_body: HTML body (optional)
-            attachments: File attachments (optional)
-            
-        Returns:
-            Dict with update result and account information
-        """
+        """Update an existing draft in a specific account."""
         try:
             if account is None:
                 account = self.get_default_account()
             
-            email_service = self.get_email_service(account)
+            email_client = self.get_email_client(account)
             
-            # Check if the underlying client supports update_draft
-            if hasattr(email_service.email_client, 'update_draft'):
-                result = email_service.email_client.update_draft(
-                    draft_id=draft_id,
-                    to=to,
-                    subject=subject,
-                    body=body,
-                    cc=cc,
-                    bcc=bcc,
-                    html_body=html_body,
-                    attachments=attachments
+            if hasattr(email_client, 'update_draft'):
+                result = email_client.update_draft(
+                    draft_id=draft_id, to=to, subject=subject, body=body,
+                    cc=cc, bcc=bcc, html_body=html_body, attachments=attachments
                 )
             else:
-                # If not supported, return an appropriate error
-                result = {
-                    'success': False,
-                    'error': f"Update draft not supported by {email_service.provider_name} provider"
-                }
+                result = {'success': False, 'error': 'Update draft not supported'}
             
-            result['account'] = account
-            result['manager'] = 'EmailManager'
+            if isinstance(result, dict):
+                result['account'] = account
+                result['manager'] = 'EmailManager'
             
             return result
-            
         except Exception as e:
-            self.logger.error(f"Failed to update draft in account '{account}': {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'account': account,
-                'manager': 'EmailManager'
-            }
-    
-    async def send_draft(
-        self,
-        draft_id: str,
-        account: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Send an existing draft from a specific account.
-        
-        Args:
-            draft_id: ID of the draft to send
-            account: Account name (uses default if not specified)
-            
-        Returns:
-            Dict with send result and account information
-        """
+            return {'success': False, 'error': str(e), 'account': account, 'manager': 'EmailManager'}
+
+    async def send_draft(self, draft_id: str, account: Optional[str] = None) -> Dict[str, Any]:
+        """Send an existing draft from a specific account."""
         try:
             if account is None:
                 account = self.get_default_account()
             
-            email_service = self.get_email_service(account)
-            result = email_service.send_draft(draft_id)
-            result['account'] = account
-            result['manager'] = 'EmailManager'
+            email_client = self.get_email_client(account)
+            result = email_client.send_draft(draft_id)
             
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"Failed to send draft from account '{account}': {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'account': account,
-                'manager': 'EmailManager'
-            }
-    
-    def list_drafts(
-        self,
-        account: Optional[str] = None,
-        max_results: int = 10
-    ) -> List[Dict[str, Any]]:
-        """
-        List drafts from a specific account.
-        
-        Args:
-            account: Account name (uses default if not specified)
-            max_results: Maximum number of drafts to return
-            
-        Returns:
-            List of draft objects with account information
-        """
-        try:
-            if account is None:
-                account = self.get_default_account()
-            
-            email_service = self.get_email_service(account)
-            
-            # Check if the underlying client supports list_drafts
-            if hasattr(email_service.email_client, 'list_drafts'):
-                drafts = email_service.email_client.list_drafts(max_results)
+            if isinstance(result, dict):
+                result['account'] = account
+                result['manager'] = 'EmailManager'
             else:
-                # If not supported, return empty list
-                drafts = []
+                result = {'success': True, 'account': account, 'manager': 'EmailManager'}
             
-            # Add account information to each draft
-            for draft in drafts:
-                draft['account'] = account
-                draft['manager'] = 'EmailManager'
+            return result
+        except Exception as e:
+            return {'success': False, 'error': str(e), 'account': account, 'manager': 'EmailManager'}
+
+    def list_drafts(self, account: Optional[str] = None, max_results: int = 10) -> List[Dict[str, Any]]:
+        """List drafts from a specific account."""
+        try:
+            if account is None:
+                account = self.get_default_account()
             
-            return drafts
+            email_client = self.get_email_client(account)
             
+            if hasattr(email_client, 'list_drafts'):
+                drafts = email_client.list_drafts(max_results)
+                if isinstance(drafts, list):
+                    for draft in drafts:
+                        if isinstance(draft, dict):
+                            draft['account'] = account
+                            draft['manager'] = 'EmailManager'
+                    return drafts
+            
+            return []
         except Exception as e:
             self.logger.error(f"Failed to list drafts from account '{account}': {e}")
             return []
-    
-    def get_draft(
-        self,
-        draft_id: str,
-        account: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Get a specific draft from an account.
-        
-        Args:
-            draft_id: ID of the draft to retrieve
-            account: Account name (uses default if not specified)
-            
-        Returns:
-            Dict with draft information and account details
-        """
+
+    def get_draft(self, draft_id: str, account: Optional[str] = None) -> Dict[str, Any]:
+        """Get a specific draft from an account."""
         try:
             if account is None:
                 account = self.get_default_account()
             
-            email_service = self.get_email_service(account)
+            email_client = self.get_email_client(account)
             
-            # Check if the underlying client supports get_draft
-            if hasattr(email_service.email_client, 'get_draft'):
-                draft = email_service.email_client.get_draft(draft_id)
+            if hasattr(email_client, 'get_draft'):
+                draft = email_client.get_draft(draft_id)
+                if isinstance(draft, dict):
+                    draft['account'] = account
+                    draft['manager'] = 'EmailManager'
+                return draft
             else:
-                # If not supported, return an appropriate error
-                draft = {
-                    'success': False,
-                    'error': f"Get draft not supported by {email_service.provider_name} provider"
-                }
-            
-            draft['account'] = account
-            draft['manager'] = 'EmailManager'
-            
-            return draft
-            
+                return {'success': False, 'error': 'Get draft not supported', 'account': account}
         except Exception as e:
-            self.logger.error(f"Failed to get draft from account '{account}': {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'account': account,
-                'manager': 'EmailManager'
-            }
-    
-    def delete_draft(
-        self,
-        draft_id: str,
-        account: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Delete a draft from a specific account.
-        
-        Args:
-            draft_id: ID of the draft to delete
-            account: Account name (uses default if not specified)
-            
-        Returns:
-            Dict with deletion result and account information
-        """
+            return {'success': False, 'error': str(e), 'account': account, 'manager': 'EmailManager'}
+
+    def delete_draft(self, draft_id: str, account: Optional[str] = None) -> Dict[str, Any]:
+        """Delete a draft from a specific account."""
         try:
             if account is None:
                 account = self.get_default_account()
             
-            email_service = self.get_email_service(account)
+            email_client = self.get_email_client(account)
             
-            # Check if the underlying client supports delete_draft
-            if hasattr(email_service.email_client, 'delete_draft'):
-                email_service.email_client.delete_draft(draft_id)
-                result = {
-                    'success': True,
-                    'message': f"Draft {draft_id} deleted successfully"
-                }
+            if hasattr(email_client, 'delete_draft'):
+                email_client.delete_draft(draft_id)
+                result = {'success': True, 'message': f"Draft {draft_id} deleted successfully"}
             else:
-                # If not supported, return an appropriate error
-                result = {
-                    'success': False,
-                    'error': f"Delete draft not supported by {email_service.provider_name} provider"
-                }
+                result = {'success': False, 'error': 'Delete draft not supported'}
             
             result['account'] = account
             result['manager'] = 'EmailManager'
-            
             return result
-            
         except Exception as e:
-            self.logger.error(f"Failed to delete draft from account '{account}': {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'account': account,
-                'manager': 'EmailManager'
-            }
+            return {'success': False, 'error': str(e), 'account': account, 'manager': 'EmailManager'}
 
     # ========================================
     # UTILITY METHODS

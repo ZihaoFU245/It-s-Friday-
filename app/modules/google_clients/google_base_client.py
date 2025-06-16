@@ -35,16 +35,19 @@ class GoogleBaseClient:
         'drive': [
             'https://www.googleapis.com/auth/drive',
             'https://www.googleapis.com/auth/drive.readonly',
-            'https://www.googleapis.com/auth/drive.file'
+            'https://www.googleapis.com/auth/drive.file'        
         ]
     }
     
-    def __init__(self, scopes: List[str], service_name: Optional[str] = None):
+    def __init__(self, scopes: List[str], credentials_path: str, token_path: str, 
+                 service_name: Optional[str] = None):
         """
         Initialize the Google Base Client with OAuth authentication.
         
         Args:
             scopes: List of Google API scopes required
+            credentials_path: Path to Google credentials JSON file (required)
+            token_path: Path to Google token JSON file (required)
             service_name: Optional service name for logging (e.g., 'Gmail', 'Calendar')
         """
         self.config = config
@@ -52,10 +55,14 @@ class GoogleBaseClient:
         self.creds: Optional[Credentials] = None
         self.scopes = sorted(scopes)  # Sort for consistent comparison
         self.service_name = service_name or "Google API"
-        self.token_path = self.config.google_token_path
-        self.credentials_path = self.config.google_credentials_path
+        
+        # Store required account-specific paths
+        self.credentials_path = credentials_path
+        self.token_path = token_path
         
         self.logger.info(f"Initializing {self.service_name} client with scopes: {self.scopes}")
+        self.logger.info(f"Using credentials: {self.credentials_path}")
+        self.logger.info(f"Using token: {self.token_path}")
         self._authenticate()
         
     def _authenticate(self):
