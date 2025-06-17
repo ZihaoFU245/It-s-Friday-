@@ -18,6 +18,7 @@ flowchart TD
     C2 --> C2a(google_clients/ - Gmail, Calendar, Drive)
     C2 --> C2b(weather.py)
     C2 --> C2c(systemInfo.py)
+    C2 --> C2d(contact_booklet.py - Contact management with SQLite 🆕)
     C --> C3(services/ Business Logic Layer)
     C3 --> C3a(weather_service.py)
     C3 --> C3b(email_manager.py - Multi-account email 🆕)
@@ -27,11 +28,17 @@ flowchart TD
     C --> C4(config.py - Multi-account configuration 🆕)
     C --> C5(secrets/ - Credentials & tokens 🆕)
     C --> C6(email_accounts.json - Account configuration 🆕)
+    C --> C7(db/ SQLite Database)
+    C7 --> C7a(database.py - SQLAlchemy setup)
+    C7 --> C7b(models.py - Contact model)
+    C7 --> C7c(app.db - SQLite database file)
     
     A --> S(skills/ Standalone MCP Server)
     S --> S1(server.py - FastMCP server)
-    S --> S2(all_skills.py - Multi-account email skills 🆕)
-    S --> S3(README.md - Skills documentation)
+    S --> S2(email_skills.py - Multi-account email skills 🆕)
+    S --> S3(contact_skills.py - Contact management MCP tools 🆕)
+    S --> S4(weather_skills.py - Weather MCP tools)
+    S --> S5(README.md - Skills documentation)
     
     A --> D(memory/ ChromaDB + embeddings)
     A --> E(tts_stt/ Whisper + ElevenLabs integration)
@@ -43,6 +50,17 @@ flowchart TD
     H --> H2(plan_executor.py - plan steps, invoke MCP skills)
     H --> H3(memory_interface.py - retrieve/store context)
     H --> S(MCP Skill Server - skills/)
+    
+    %% Smart Automation Flow
+    H2 --> AI{AI Request Analysis}
+    AI --> AI1["Send email to Sergio about project"]
+    AI1 --> S3
+    S3 --> C2d
+    C2d --> S2
+    S2 --> C3b
+    AI --> AI2["What's the weather in Paris?"]
+    AI2 --> S4
+    S4 --> C2b
 ```
 
 ## Email System Architecture 🆕
@@ -82,42 +100,113 @@ sequenceDiagram
     participant UI as User Interface
     participant LLM as LLM Orchestrator
     participant MCP as Skill Server (MCP)
+    participant CM as ContactManager
     participant EM as EmailManager
     participant Gmail as Gmail API
 
-    UI->>LLM: "Send work email to John"
-    LLM->>MCP: invoke(skill="send_email_from_account", account="work", ...)
-    MCP->>EM: send_email(account="work", ...)
+    UI->>LLM: "Send work email to Sergio about project update"
+    LLM->>MCP: invoke(skill="find_contact", name="Sergio")
+    MCP->>CM: search contact by name
+    CM-->>MCP: return contact with email
+    MCP-->>LLM: Contact found: sergio@company.com
+    LLM->>MCP: invoke(skill="send_email_from_account", to="sergio@company.com", account="work", ...)
+    MCP->>EM: send_email(account="work", to="sergio@company.com", ...)
     EM->>Gmail: Gmail API call with work credentials
     Gmail-->>EM: Success / Data
     EM-->>MCP: Return result with account info
     MCP-->>LLM: Return result
-    LLM->>UI: "Work email sent to John!"
+    LLM->>UI: "Work email sent to Sergio about project update!"
 ```
 
-## File Structure Changes 🆕
+## Codebase Structure 📁
 
 ```
-app/
-├── config.py                    # Multi-account configuration
-├── email_accounts.json          # Account configurations (auto-generated)
-├── secrets/                     # 🆕 Secure credential storage
-│   ├── credentials.json         # Default Gmail credentials
-│   ├── token.json              # Default Gmail token
-│   ├── credentials_personal.json # Personal account credentials
-│   ├── token_personal.json     # Personal account token
-│   ├── credentials_work.json   # Work account credentials
-│   └── token_work.json         # Work account token
-└── services/
-    ├── email_manager.py        # 🆕 Multi-account email manager
-    └── email_service.py        # ⚠️ Deprecated single-account service
-
-skills/
-├── all_skills.py              # 🆕 Multi-account email functions
-└── server.py                  # 🆕 Multi-account MCP tools
-
-setup_email_accounts.py       # 🆕 Account management utility
-test_multi_email_setup.py     # 🆕 Setup validation script
+its-Friday/
+├── 📄 ReadMe.md                     # Project documentation
+├── 📄 requirements.txt              # Python dependencies
+├── 📄 api.json                      # API configuration
+├── 📄 .env.sample                   # Environment template
+├── 📄 MULTI_ACCOUNT_FIX_SUMMARY.md  # Multi-account fix documentation
+│
+├── 📁 app/                          # Main Python application
+│   ├── 📄 __init__.py               # App initialization & service instances
+│   ├── 📄 main.py                   # FastAPI HTTP server
+│   ├── 📄 config.py                 # Multi-account configuration system
+│   ├── 📄 dependencies.py           # FastAPI dependencies & auth
+│   ├── 📄 utils.py                  # Utility functions & EmailAccountManager
+│   ├── 📄 .env                      # Environment variables (local)
+│   ├── 📄 email_accounts.json       # Email account configurations
+│   ├── 📄 email_accounts.json.example # Email config template
+│   │
+│   ├── 📁 db/                       # Database layer
+│   │   ├── 📄 database.py           # SQLAlchemy database setup
+│   │   ├── 📄 models.py             # Database models (Contact, etc.)
+│   │   └── 📄 app.db                # SQLite database file
+│   │
+│   ├── 📁 modules/                  # Core functionality modules
+│   │   ├── 📄 __init__.py           # Module imports
+│   │   ├── 📄 weather.py            # Weather API client
+│   │   ├── 📄 contact_booklet.py    # Contact management
+│   │   ├── 📄 systemInfo.py         # System information gathering
+│   │   │
+│   │   ├── 📁 google_clients/       # Google API clients
+│   │   │   ├── 📄 __init__.py       # Google clients exports
+│   │   │   ├── 📄 google_base_client.py # OAuth2 base client
+│   │   │   ├── 📄 gmail_client.py   # Gmail API wrapper
+│   │   │   ├── 📄 calendar_client.py# Calendar API wrapper
+│   │   │   └── 📄 drive_client.py   # Drive API wrapper
+│   │   │
+│   │   └── 📁 email_clients/        # Email provider adapters
+│   │       ├── 📄 __init__.py       # Email clients exports
+│   │       ├── 📄 base_email_client.py # Abstract email interface
+│   │       ├── 📄 gmail_client_adapter.py # Gmail adapter
+│   │       ├── 📄 outlook_client_adapter.py # Outlook adapter (placeholder)
+│   │       └── 📄 README.md         # Email architecture docs
+│   │
+│   ├── 📁 services/                 # Business logic layer
+│   │   ├── 📄 __init__.py           # Service exports
+│   │   ├── 📄 weather_service.py    # Weather operations
+│   │   ├── 📄 email_manager.py      # 🆕 Multi-account email manager
+│   │   ├── 📄 calendar_service.py   # Calendar operations
+│   │   └── 📄 drive_service.py      # Drive operations
+│   │
+│   ├── 📁 routes/                   # FastAPI route handlers
+│   │   ├── 📄 __init__.py           # Routes initialization
+│   │   └── 📄 weather_endpoints.py  # Weather HTTP endpoints
+│   │
+│   ├── 📁 secrets/                  # 🔒 Secure credential storage
+│   │   ├── 📄 credentials.json      # Default Gmail credentials
+│   │   ├── 📄 token.json           # Default Gmail token
+│   │   └── 📄 test_token.json      # Test credentials
+│   │
+│   └── 📁 logs/                     # Application logs
+│
+├── 📁 skills/                       # 🤖 MCP Server (Model Context Protocol)
+│   ├── 📄 __init__.py               # Skills module exports
+│   ├── 📄 server.py                 # FastMCP server with all tools
+│   ├── 📄 weather_skills.py         # Weather-related MCP tools
+│   ├── 📄 email_skills.py           # 🆕 Multi-account email tools
+│   ├── 📄 calendar_skills.py        # Calendar-related MCP tools
+│   ├── 📄 drive_skills.py           # Drive-related MCP tools
+│   └── 📄 README.md                 # Skills documentation
+│
+├── 📁 examples/                     # Usage examples
+│   └── 📄 email_manager_demo.py     # EmailManager usage examples
+│
+├── 📁 testing/                      # Test suite
+│   ├── 📄 test_auth_system.py       # Google OAuth testing
+│   ├── 📄 test_contact.py           # Contact system testing
+│   ├── 📄 test_email.py             # Email functionality testing
+│   └── 📁 need_verify/              # Integration test results
+│       └── 📄 README.MD             # Test verification docs
+│
+└── 📁 ZZZ_guides/                   # 📚 Comprehensive documentation
+    ├── 📄 EMAIL_SYSTEM_ARCHITECTURE.md # Email system detailed docs
+    ├── 📄 GMAIL_CLIENT_README.md     # Gmail client documentation
+    ├── 📄 INTEGRATION_GUIDE.md       # Integration guide
+    ├── 📄 MULTI_ACCOUNT_EMAIL_GUIDE.md # Multi-account setup guide
+    ├── 📄 OAUTH_FLOW.md             # OAuth2 authentication flow
+    └── 📄 gmail_client_examples.py  # Gmail client code examples
 ```
 
 ## Quick Setup for Multi-Account Email
@@ -149,10 +238,33 @@ cd skills && python server.py
 
 ## New MCP Tools Available 🆕
 
+### Contact Management Tools:
+- `list_contacts(offset=0, limit=20)` - List all contacts with pagination
+- `find_contact(name="Sergio")` - Search contacts by name (surname/forename)
+- `add_contact(contact_data)` - Add new contact to database
+- `update_contact(contact_id, updated_data)` - Update existing contact
+- `delete_contact(name)` - Delete contacts by name
+- `get_contact_by_id(contact_id)` - Get specific contact by ID
+
+### Email Management Tools:
 - `list_email_accounts()` - Show all configured accounts
 - `get_unread_emails_from_account(account="personal")` - Get emails from specific account
 - `get_unread_emails_all_accounts()` - Get emails from all accounts
 - `send_email_from_account(..., account="work")` - Send from specific account
+- `create_draft_tool(..., account="work")` - Create email drafts
+- `mark_emails_as_read_tool(message_ids, account)` - Mark emails as read
+
+### Smart Automation Examples:
+```
+User: "Send an email to Sergio about the Friday project update"
+→ Model finds Sergio's contact → Gets email address → Sends email
+
+User: "Email all clients about the new feature"  
+→ Model searches contacts with tag 'client' → Sends bulk emails
+
+User: "What's John's phone number?"
+→ Model searches contacts for John → Returns contact details
+```
 
 ## Environment Configuration
 
@@ -218,9 +330,11 @@ result = await email_manager.send_email(
 
 **Recent Updates:**
 - ✅ Multi-account email support
+- ✅ Contact management system with SQLite database
 - ✅ Secure credential management
-- ✅ MCP server integration
+- ✅ MCP server integration with contact tools
 - ✅ Account management utilities
+- ✅ Smart email automation (contact lookup + email sending)
 - ✅ Comprehensive documentation
 
 **Coming Soon:**
