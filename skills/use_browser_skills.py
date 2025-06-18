@@ -150,6 +150,96 @@ async def get_page_html() -> Dict[str, Any]:
             'error': str(e)
         }
 
+async def get_page_text() -> Dict[str, Any]:
+    """
+    Get all text content from the current page, filtering out href links and keeping only readable text.
+    
+    Returns:
+        Dict containing the extracted text content
+    """
+    try:
+        if not is_browser_session_active():
+            return {
+                'success': False,
+                'error': 'No active browser session',
+                'session_active': False,
+                'recommendation': 'Use browser_create_new_session() then browser_navigate_to_url()'
+            }
+        
+        browser = get_browser_instance()
+        text = browser.get_page_text()
+        
+        return {
+            'success': True,
+            'text': text,
+            'length': len(text) if text else 0,
+            'session_active': True
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'session_active': is_browser_session_active()
+        }
+
+async def find_element_by_id(element_id: str, timeout: int = 10) -> Dict[str, Any]:
+    """
+    Find an element by its ID attribute.
+    
+    Args:
+        element_id: The ID of the element to find
+        timeout: Timeout in seconds
+        
+    Returns:
+        Dict containing success status and element information
+    """
+    try:
+        if not is_browser_session_active():
+            return {
+                'success': False,
+                'error': 'No active browser session',
+                'element_id': element_id,
+                'session_active': False,
+                'recommendation': 'Use browser_create_new_session() then browser_navigate_to_url()'
+            }
+        
+        browser = get_browser_instance()
+        element = browser.find_element_by_id(element_id, timeout)
+        
+        if element:
+            # Get basic element information
+            tag_name = element.tag_name
+            text = element.text[:100] if element.text else ""
+            is_displayed = element.is_displayed()
+            is_enabled = element.is_enabled()
+            
+            return {
+                'success': True,
+                'element_id': element_id,
+                'found': True,
+                'tag_name': tag_name,
+                'text_preview': text,
+                'is_displayed': is_displayed,
+                'is_enabled': is_enabled,
+                'session_active': True
+            }
+        else:
+            return {
+                'success': False,
+                'element_id': element_id,
+                'found': False,
+                'error': f'Element with ID "{element_id}" not found',
+                'session_active': True
+            }
+            
+    except Exception as e:
+        return {
+            'success': False,
+            'element_id': element_id,
+            'error': str(e),
+            'session_active': is_browser_session_active()
+        }
+
 # Element Interaction Skills
 async def click_element(selector: str, by_type: str = "css", timeout: int = 10) -> Dict[str, Any]:
     """
@@ -1059,4 +1149,109 @@ async def get_browser_session_status() -> Dict[str, Any]:
             'success': False,
             'error': str(e),
             'session_active': False
+        }
+
+# Tab Management Skills
+async def switch_browser_tabs(tab_index: Optional[int] = None, tab_handle: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Switch to a specific browser tab.
+    
+    Args:
+        tab_index: Index of the tab to switch to (0-based)
+        tab_handle: Window handle of the tab to switch to
+        
+    Returns:
+        Dict containing success status and tab information
+    """
+    try:
+        browser = get_browser_instance()
+        success = browser.switch_tabs(tab_index, tab_handle)
+        
+        return {
+            'success': success,
+            'tab_index': tab_index,
+            'tab_handle': tab_handle,
+            'action': 'switch_tabs'
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'tab_index': tab_index,
+            'tab_handle': tab_handle,
+            'action': 'switch_tabs'
+        }
+
+async def get_all_browser_tab_descriptions() -> Dict[str, Any]:
+    """
+    Get descriptions of all open browser tabs.
+    
+    Returns:
+        Dict containing all tab information including titles, URLs, and current tab
+    """
+    try:
+        browser = get_browser_instance()
+        tab_descriptions = browser.get_all_tab_descriptions()
+        
+        return {
+            'success': True,
+            'tab_count': len(tab_descriptions),
+            'tabs': tab_descriptions,
+            'action': 'get_all_tab_descriptions'
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'action': 'get_all_tab_descriptions'
+        }
+
+async def open_new_browser_tab(url: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Open a new browser tab and optionally navigate to a URL.
+    
+    Args:
+        url: Optional URL to navigate to in the new tab
+        
+    Returns:
+        Dict containing success status and new tab handle
+    """
+    try:
+        browser = get_browser_instance()
+        tab_handle = browser.open_new_tab(url)
+        
+        return {
+            'success': tab_handle is not None,
+            'tab_handle': tab_handle,
+            'url': url,
+            'action': 'open_new_tab'
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'url': url,
+            'action': 'open_new_tab'
+        }
+
+async def close_current_browser_tab() -> Dict[str, Any]:
+    """
+    Close the current browser tab and switch to another if available.
+    
+    Returns:
+        Dict containing success status
+    """
+    try:
+        browser = get_browser_instance()
+        success = browser.close_current_tab()
+        
+        return {
+            'success': success,
+            'action': 'close_current_tab'
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'action': 'close_current_tab'
         }

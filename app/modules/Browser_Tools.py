@@ -11,6 +11,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from app import config
 import logging
 import time
+import re
 from pathlib import Path
 
 class BrowserTools:
@@ -23,15 +24,37 @@ class BrowserTools:
 
         chrome_options = Options()
         if headless:
-            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--headless=new")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option("useAutomationExtension", False)
 
         self.driver = webdriver.Chrome(options=chrome_options)
         self.actions = ActionChains(self.driver)
 
+        self._stealth_patch()
+
         self._wait_for_dom_ready()
         self.logger.info("initialized browser")
+
+    def _stealth_patch(self):
+        # Patch navigator.webdriver, languages, plugins, etc.
+        stealth_script = """
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+            Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
+            Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => 4 });
+            Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+
+            // Mimic Chrome-specific properties
+            window.chrome = { runtime: {} };
+        """
+        self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": stealth_script
+        })
 
     def _wait_for_dom_ready(self, timeout=10):
         """Wait until the DOM is fully loaded and rendered."""
@@ -46,10 +69,116 @@ class BrowserTools:
         return self.driver.page_source
 
     def get_html(self):
-        """Get the current page's HTML source."""
-        html = self.driver.page_source
-        self.logger.info("Retrieved current page HTML")
-        return html
+        """Get the current page's HTML source with CSS, JS, and href links filtered out."""
+        try:
+            # Use JavaScript to create a clean HTML structure
+            clean_html = self.driver.execute_script("""
+                // Clone the document to avoid modifying the original
+                var clone = document.cloneNode(true);
+                
+                // Remove script tags
+                var scripts = clone.querySelectorAll('script');
+                scripts.forEach(function(script) { script.remove(); });
+                
+                // Remove style tags
+                var styles = clone.querySelectorAll('style');
+                styles.forEach(function(style) { style.remove(); });
+                
+                // Remove link tags (CSS, etc.)
+                var links = clone.querySelectorAll('link');
+                links.forEach(function(link) { link.remove(); });
+                
+                // Remove all style attributes and event handlers
+                var allElements = clone.querySelectorAll('*');
+                allElements.forEach(function(element) {
+                    element.removeAttribute('style');
+                    element.removeAttribute('onclick');
+                    element.removeAttribute('onload');
+                    element.removeAttribute('onmouseover');
+                    element.removeAttribute('onmouseout');
+                    element.removeAttribute('href');
+                });
+                
+                return clone.documentElement.outerHTML;
+            """)
+            
+            self.logger.info("Retrieved filtered HTML (no CSS/JS/href)")
+            return clean_html
+        except Exception as e:
+            # Fallback to original method if JavaScript fails
+            self.logger.warning(f"Failed to filter HTML, returning original: {str(e)}")
+            html = self.driver.page_source
+            self.logger.info("Retrieved current page HTML")
+            return html
+
+    def get_page_text(self):
+        """Get all text content from the page, filtering out href links and keeping only readable text."""
+        try:
+            # Use JavaScript to extract clean text content
+            page_text = self.driver.execute_script("""
+                // Get all text nodes and visible text, excluding links
+                var walker = document.createTreeWalker(
+                    document.body,
+                    NodeFilter.SHOW_TEXT,
+                    {
+                        acceptNode: function(node) {
+                            // Skip text nodes that are inside script, style tags, or hidden elements
+                            var parent = node.parentElement;
+                            if (!parent) return NodeFilter.FILTER_REJECT;
+                            
+                            var tagName = parent.tagName.toLowerCase();
+                            if (['script', 'style', 'noscript'].includes(tagName)) {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            
+                            // Skip if parent is a link (a tag)
+                            if (tagName === 'a') {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            
+                            // Skip if text is just whitespace
+                            if (node.textContent.trim() === '') {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            
+                            return NodeFilter.FILTER_ACCEPT;
+                        }
+                    }
+                );
+                
+                var textNodes = [];
+                var node;
+                while (node = walker.nextNode()) {
+                    var text = node.textContent.trim();
+                    if (text && text.length > 0) {
+                        textNodes.push(text);
+                    }
+                }
+                
+                return textNodes.join(' ');
+            """)
+            
+            # Clean up the text - remove extra whitespace and normalize
+            if page_text:
+                # Remove multiple spaces and normalize whitespace
+                page_text = re.sub(r'\s+', ' ', page_text).strip()
+                # Remove common navigation/UI text patterns
+                page_text = re.sub(r'\b(Home|Navigation|Menu|Footer|Header|Sidebar|Skip to content)\b', '', page_text, flags=re.IGNORECASE)
+                page_text = re.sub(r'\s+', ' ', page_text).strip()
+            
+            self.logger.info(f"Retrieved page text, {len(page_text)} characters")
+            return page_text
+            
+        except Exception as e:
+            self.logger.error(f"Failed to get page text: {str(e)}")
+            # Fallback: get text from body element
+            try:
+                body_text = self.driver.find_element(By.TAG_NAME, "body").text
+                self.logger.info("Retrieved page text using fallback method")
+                return body_text
+            except Exception as fallback_error:
+                self.logger.error(f"Fallback method also failed: {str(fallback_error)}")
+                return ""
 
     def find_element(self, selector, by=By.CSS_SELECTOR, timeout=10):
         """Find a single element using the specified selector."""
@@ -61,6 +190,18 @@ class BrowserTools:
             return element
         except TimeoutException:
             self.logger.error(f"Element not found: {selector}")
+            return None
+
+    def find_element_by_id(self, element_id, timeout=10):
+        """Find an element by its ID attribute."""
+        try:
+            element = WebDriverWait(self.driver, timeout).until(
+                EC.presence_of_element_located((By.ID, element_id))
+            )
+            self.logger.info(f"Found element by ID: {element_id}")
+            return element
+        except TimeoutException:
+            self.logger.error(f"Element with ID '{element_id}' not found")
             return None
 
     def find_elements(self, selector, by=By.CSS_SELECTOR):
@@ -372,5 +513,134 @@ class BrowserTools:
         """Context manager exit - automatically close browser."""
         self.close()
 
+    def switch_tabs(self, tab_index=None, tab_handle=None):
+        """Switch to a specific tab by index or window handle."""
+        try:
+            current_handles = self.driver.window_handles
+            
+            if tab_handle:
+                # Switch by window handle
+                if tab_handle in current_handles:
+                    self.driver.switch_to.window(tab_handle)
+                    self._wait_for_dom_ready()
+                    self.logger.info(f"Switched to tab with handle: {tab_handle}")
+                    return True
+                else:
+                    self.logger.error(f"Invalid tab handle: {tab_handle}")
+                    return False
+            
+            elif tab_index is not None:
+                # Switch by index
+                if 0 <= tab_index < len(current_handles):
+                    self.driver.switch_to.window(current_handles[tab_index])
+                    self._wait_for_dom_ready()
+                    self.logger.info(f"Switched to tab at index: {tab_index}")
+                    return True
+                else:
+                    self.logger.error(f"Invalid tab index: {tab_index}. Available tabs: {len(current_handles)}")
+                    return False
+            
+            else:
+                # If no parameters provided, switch to the next tab
+                current_handle = self.driver.current_window_handle
+                current_index = current_handles.index(current_handle)
+                next_index = (current_index + 1) % len(current_handles)
+                self.driver.switch_to.window(current_handles[next_index])
+                self._wait_for_dom_ready()
+                self.logger.info(f"Switched to next tab (index {next_index})")
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"Failed to switch tabs: {str(e)}")
+            return False
 
+    def get_all_tab_descriptions(self):
+        """Get descriptions (title and URL) of all open tabs."""
+        try:
+            current_handle = self.driver.current_window_handle
+            all_handles = self.driver.window_handles
+            tab_descriptions = []
+            
+            for i, handle in enumerate(all_handles):
+                try:
+                    # Switch to the tab
+                    self.driver.switch_to.window(handle)
+                    
+                    # Get tab information
+                    title = self.driver.title
+                    url = self.driver.current_url
+                    is_current = (handle == current_handle)
+                    
+                    tab_descriptions.append({
+                        'index': i,
+                        'handle': handle,
+                        'title': title,
+                        'url': url,
+                        'is_current': is_current
+                    })
+                    
+                except Exception as e:
+                    self.logger.error(f"Failed to get info for tab {i}: {str(e)}")
+                    tab_descriptions.append({
+                        'index': i,
+                        'handle': handle,
+                        'title': 'Error retrieving title',
+                        'url': 'Error retrieving URL',
+                        'is_current': False,
+                        'error': str(e)
+                    })
+            
+            # Switch back to the original tab
+            self.driver.switch_to.window(current_handle)
+            
+            self.logger.info(f"Retrieved descriptions for {len(tab_descriptions)} tabs")
+            return tab_descriptions
+            
+        except Exception as e:
+            self.logger.error(f"Failed to get tab descriptions: {str(e)}")
+            return []
 
+    def open_new_tab(self, url=None):
+        """Open a new tab and optionally navigate to a URL."""
+        try:
+            # Open new tab using JavaScript
+            self.driver.execute_script("window.open('');")
+            
+            # Switch to the new tab (it will be the last one)
+            new_handles = self.driver.window_handles
+            self.driver.switch_to.window(new_handles[-1])
+            
+            if url:
+                self.driver.get(url)
+                self._wait_for_dom_ready()
+            
+            self.logger.info(f"Opened new tab" + (f" and navigated to {url}" if url else ""))
+            return new_handles[-1]  # Return the handle of the new tab
+            
+        except Exception as e:
+            self.logger.error(f"Failed to open new tab: {str(e)}")
+            return None
+
+    def close_current_tab(self):
+        """Close the current tab and switch to another if available."""
+        try:
+            current_handles = self.driver.window_handles
+            
+            if len(current_handles) <= 1:
+                self.logger.error("Cannot close the last remaining tab")
+                return False
+            
+            current_handle = self.driver.current_window_handle
+            self.driver.close()
+            
+            # Switch to the first remaining tab
+            remaining_handles = [h for h in current_handles if h != current_handle]
+            self.driver.switch_to.window(remaining_handles[0])
+            self._wait_for_dom_ready()
+            
+            self.logger.info("Closed current tab and switched to another")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to close current tab: {str(e)}")
+            return False
