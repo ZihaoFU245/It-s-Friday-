@@ -94,6 +94,7 @@ class Config(BaseSettings):
     )
     # for web accessing
     user_agent: Union[None, str] = Field(None, env="USER-AGENT")
+    driver_path: Path = Field(Path(__file__).resolve().parent.parent / 'drivers' / 'chromedriver.exe', env="DRIVER_PATH")
 
     BASE_DIR: Path = Path(__file__).resolve().parent
     db_path: str = f"sqlite:///{(BASE_DIR / 'db/app.db').resolve()}"
@@ -146,8 +147,7 @@ class Config(BaseSettings):
                 },
                 'file': {
                     'class': 'logging.handlers.RotatingFileHandler',
-                    'level': self.log_level,
-                    'formatter': 'standard',
+                    'level': self.log_level,                    'formatter': 'standard',
                     'filename': str(self.log_path),
                     'maxBytes': self.log_max_size * 1024 * 1024,  # Convert MB to bytes
                     'backupCount': self.log_counts,
@@ -171,11 +171,122 @@ class Config(BaseSettings):
         """Configure verbose logging for FastAPI application"""
         logging.config.dictConfig(self.logging_config)
         logging.captureWarnings(True)
-    
+        
     def configure_mcp_logging(self) -> None:
         """Configure minimal logging for MCP server to prevent JSON-RPC parsing issues"""
         # This must be done BEFORE importing any modules that might log
-        logging.basicConfig(level=logging.CRITICAL, format='%(message)s')
+        # Set up a file handler instead of using basicConfig (which sets up console logging)
+        mcp_log_file = self.log_path.parent / "mcp.log"
+        file_handler = logging.FileHandler(mcp_log_file)
+        file_handler.setLevel(logging.CRITICAL)
+        file_handler.setFormatter(logging.Formatter('%(message)s'))
+        
+        # Configure the root logger with just the file handler
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.CRITICAL)
+        # Remove any existing handlers (like console handlers)
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+        # Add only the file handler
+        root_logger.addHandler(file_handler)
+        
+        # Suppress all MCP-related verbose logging
+        loggers_to_suppress = [
+            "fastmcp",
+            "mcp",
+            "mcp.server", 
+            "mcp.server.lowlevel",
+            "mcp.server.lowlevel.server",
+            "asyncio",
+            "urllib3",
+            "requests"
+        ]
+        
+        for logger_name in loggers_to_suppress:
+            logger = logging.getLogger(logger_name)
+            logger.setLevel(logging.CRITICAL)
+            # Remove any existing handlers
+            for handler in logger.handlers[:]:
+                logger.removeHandler(handler)
+            # Add only the file handler
+            logger.addHandler(file_handler)
+            
+        # Completely disable debug and info logging for all loggers
+        logging.disable(logging.DEBUG)
+        logging.disable(logging.INFO)
+        
+        # Configure the root logger with just the file handler
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.CRITICAL)
+        # Remove any existing handlers (like console handlers)
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+        # Add only the file handler
+        root_logger.addHandler(file_handler)
+        
+        # Suppress all MCP-related verbose logging
+        loggers_to_suppress = [
+            "fastmcp",
+            "mcp",
+            "mcp.server", 
+            "mcp.server.lowlevel",
+            "mcp.server.lowlevel.server",
+            "asyncio",
+            "urllib3",
+            "requests"
+        ]
+        
+        for logger_name in loggers_to_suppress:
+            logger = logging.getLogger(logger_name)
+            logger.setLevel(logging.CRITICAL)
+            # Remove any existing handlers
+            for handler in logger.handlers[:]:
+                logger.removeHandler(handler)
+            # Add only the file handler
+            logger.addHandler(file_handler)
+            
+        # Completely disable debug and info logging for all loggers
+        logging.disable(logging.DEBUG)
+        logging.disable(logging.INFO)
+        # Remove any existing handlers (like console handlers)
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+        # Add only the file handler
+        root_logger.addHandler(file_handler)
+        
+        # Suppress all MCP-related verbose logging
+        loggers_to_suppress = [
+            "fastmcp",
+            "mcp",
+            "mcp.server", 
+            "mcp.server.lowlevel",
+            "mcp.server.lowlevel.server",
+            "asyncio",
+            "urllib3",
+            "requests"
+        ]
+        
+        for logger_name in loggers_to_suppress:
+            logger = logging.getLogger(logger_name)
+            logger.setLevel(logging.CRITICAL)
+            # Remove any existing handlers
+            for handler in logger.handlers[:]:
+                logger.removeHandler(handler)
+            # Add only the file handler
+            logger.addHandler(file_handler)
+            
+        # Completely disable debug and info logging for all loggers
+        logging.disable(logging.DEBUG)
+        logging.disable(logging.INFO)
+        
+        # Configure the root logger with just the file handler
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.CRITICAL)
+        # Remove any existing handlers (like console handlers)
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+        # Add only the file handler
+        root_logger.addHandler(file_handler)
         
         # Suppress all MCP-related verbose logging
         loggers_to_suppress = [
