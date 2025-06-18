@@ -1,6 +1,6 @@
 # We are making a Agent App which is called <i><b>It's Friday!😆</b></i>
 
-## Application Structure Overview
+## [Application Structure Overview](https://miro.com/app/board/uXjVIn1-BAo=/?share_link_id=864006856272)
 
 ```mermaid
 flowchart TD
